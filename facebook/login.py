@@ -196,8 +196,3 @@ def FollowerCount(r, cookie:str, token:str):
 def PostCount(r, cookie:str, token:str):
     req = r.get('https://graph.facebook.com/me?fields=posts.fields(id).limit(5000)&access_token={}'.format(token), cookies={'cookie':cookie}).json()
     return({'post':len(req['posts']['data'])})
-
-# if __name__ == '__main__':
-#     cookie = 'sb=dO6kZZiKUA-GYCqlx7trixOV;c_user=61556949299760;ps_n=1;ps_l=1;datr=mjM7Zg3rmUhUVJ7jCBI7QLhl;fbl_st=100437153%3BT%3A28618176;wl_cbv=v2%3Bclient_version%3A2517%3Btimestamp%3A1717090559;vpd=v1%3B640x360x2.0000000298023224;m_page_voice=61556949299760;xs=42%3A_LBMPl7hh2_NtQ%3A2%3A1715093294%3A-1%3A10888%3A%3AAcWoeRrcZAzI4fsyTt9DP2D1z_0Z6waWeaJz3eWBVCM;fr=1DUsikiK908ysqVxW.AWXPficUmBvi5D235gdqTyKyEps.BmYoYr..AAA.0.0.BmZfqO.AWUG1LHEMkE;'
-#     login_data = LoginEmail('budijancok@fuwari.be', 'gausagantisandi123')
-#     print(login_data)
