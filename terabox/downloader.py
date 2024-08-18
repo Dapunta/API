@@ -20,24 +20,12 @@ class Terabox():
 
     def __init__(self, url:str) -> None:
 
-        self.data = []
-        self.r    = requests.Session()
-        self.head = {
-            'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Encoding':'gzip, deflate, zstd',
-            'Accept-Language':'en-US,en;q=0.9',
-            'Connection':'keep-alive',
+        self.data   = []
+        self.cookie = ''
+        self.r      = requests.Session()
+        self.head   = {
             'Cookie':'PANWEB=1',
-            'Host':'www.terabox.com',
-            'Sec-Fetch-Dest':'document',
-            'Sec-Fetch-Mode':'navigate',
-            'Sec-Fetch-Site':'none',
-            'Sec-Fetch-User':'?1',
-            'Upgrade-Insecure-Requests':'1',
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'sec-ch-ua':'""',
-            'sec-ch-ua-mobile':'?0',
-            'sec-ch-ua-platform':'""',
         }
 
         try:
@@ -51,15 +39,17 @@ class Terabox():
 
     def getSurl(self, url:str) -> str:
         req = self.r.get(url, headers=self.head, allow_redirects=True)
+        self.cookie = '&'.join(['{}={}'.format(key,value) for key,value in self.r.cookies.get_dict().items()])
+        self.head.update({'cookie':self.cookie})
         return(re.search(r'surl=([^&]+)',str(req.url)).group(1))
 
     def findRoot(self, surl:str) -> str:
-        req = self.r.get('https://www.terabox.com/share/list?shorturl={}&root=1'.format(surl), headers=self.head).json()
+        req = self.r.get('https://www.terabox.com/share/list?shorturl={}&root=1'.format(surl), headers=self.head, cookies={'cookie':self.cookie}).json()
         return(req['share_id'], req['uk'])
 
     def loopIter(self, share_id:str, uk:str, fid:str='', root:str='1') -> None:
         url = 'https://terabox.com/share/list?' + '&'.join(['{}={}'.format(key,value) for key,value in customPayload(share_id, uk, fid, root).items()])
-        req = self.r.get(url, headers=self.head).json()
+        req = self.r.get(url, headers=self.head, cookies={'cookie':self.cookie}).json()
         for item in req['list']:
             try:
                 if int(item['isdir']) == 1: self.loopIter(share_id, uk, item['fs_id'], '0')
@@ -67,12 +57,23 @@ class Terabox():
             except Exception: continue
 
     def appendData(self, item:dict) -> None:
+        std_url  = str(item['dlink']).split('&chkv')[0]
+        fast_url = str(self.fastURL(std_url))
         self.data.append({
             'name'      : str(item.get('server_filename')),
             'size'      : round(float(int(item['size'])/(1024*1024)),2),
             'thumbnail' : str(item['thumbs']['url3']),
-            'url'       : str(item['dlink']),
+            'url'       : std_url,
+            'url2'      : fast_url
         })
+
+    def fastURL(self, url:str) -> str:
+        try:
+            slow_url = self.r.head(url, headers=self.head, cookies={'cookie':self.cookie}, allow_redirects=True).url
+            fast_url = slow_url.replace(re.search(r'://(.*?)\.',str(slow_url)).group(1), 'd')
+        except Exception:
+            fast_url = url
+        return(fast_url)
 
     def returner(self, success:bool=False) -> dict:
         if success: response = {'status':'success', 'total_file':len(self.data), 'file':self.data}
