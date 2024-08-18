@@ -1,4 +1,5 @@
 import requests, re
+from urllib.parse import unquote
 
 def customPayload(share_id:str, uk:str, fid:str='', root:str='1') -> dict:
     return({
@@ -30,12 +31,17 @@ class Terabox():
 
         try:
             surl = self.getSurl(url)
-            share_id, uk = self.findRoot(surl)
-            self.loopIter(share_id, uk)
-            if len(self.data) != 0: self.return_data = self.returner(success=True)
-            else: self.return_data = self.returner(success=False)
+            root = self.findRoot(surl)
+            share_id, uk = root['share_id'], root['uk']
+            if 'path' in url:
+                path = str(unquote(re.search(r'path=([^&]+)',str(url)).group(1)))
+                fsid = self.findFsid(root, path)
+                self.loopIter(share_id, uk, fsid, '0')
+            else:
+                self.loopIter(share_id, uk)
+            self.return_data = self.returner(success=True, message='')
         except Exception:
-            self.return_data = self.returner(success=False)
+            self.return_data = self.returner(success=False, message='terjadi kesalahan')
 
     def getSurl(self, url:str) -> str:
         req = self.r.get(url, headers=self.head, allow_redirects=True)
@@ -45,7 +51,10 @@ class Terabox():
 
     def findRoot(self, surl:str) -> str:
         req = self.r.get('https://www.terabox.com/share/list?shorturl={}&root=1'.format(surl), headers=self.head, cookies={'cookie':self.cookie}).json()
-        return(req['share_id'], req['uk'])
+        return(req)
+
+    def findFsid(self, root:dict, path:str) -> str:
+        return([item['fs_id'] for item in root['list'] if item['path'] == path][0])
 
     def loopIter(self, share_id:str, uk:str, fid:str='', root:str='1') -> None:
         url = 'https://terabox.com/share/list?' + '&'.join(['{}={}'.format(key,value) for key,value in customPayload(share_id, uk, fid, root).items()])
@@ -57,8 +66,9 @@ class Terabox():
             except Exception: continue
 
     def appendData(self, item:dict) -> None:
-        std_url  = str(item['dlink']).split('&chkv')[0]
-        fast_url = str(self.fastURL(std_url))
+        std_url = str(item['dlink']).split('&chkv')[0]
+        format_file = item['server_filename'].split('.')[-1]
+        fast_url = std_url if format_file in ['jpg', 'png', 'webp'] else str(self.fastURL(std_url))
         self.data.append({
             'name'      : str(item.get('server_filename')),
             'size'      : round(float(int(item['size'])/(1024*1024)),2),
@@ -69,13 +79,13 @@ class Terabox():
 
     def fastURL(self, url:str) -> str:
         try:
-            slow_url = self.r.head(url, headers=self.head, cookies={'cookie':self.cookie}, allow_redirects=True).url
+            slow_url = self.r.head(url, allow_redirects=True).url
             fast_url = slow_url.replace(re.search(r'://(.*?)\.',str(slow_url)).group(1), 'd')
         except Exception:
             fast_url = url
         return(fast_url)
 
-    def returner(self, success:bool=False) -> dict:
-        if success: response = {'status':'success', 'total_file':len(self.data), 'file':self.data}
-        else: response = {'status':'failed', 'total_file':0, 'file':[]}
+    def returner(self, success:bool=False, message:str='') -> dict:
+        if success: response = {'status':'success', 'message':message, 'total_file':len(self.data), 'file':self.data}
+        else: response = {'status':'failed', 'message':message, 'total_file':0, 'file':[]}
         return(response)
